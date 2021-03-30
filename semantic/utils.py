@@ -5,8 +5,12 @@
 
 
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import numpy as np
 import matplotlib.pyplot as plt
 from gensim.models.callbacks import CallbackAny2Vec
+from gensim.models import Word2Vec, KeyedVectors
+from tensorflow.keras.layers import Embedding
 
 
 class MetricCallback(CallbackAny2Vec):
@@ -30,7 +34,7 @@ class MetricCallback(CallbackAny2Vec):
         self.loss_previous_step = loss
 
 
-def plot_vectors(starts, ends, wv, estimator=PCA, **kwargs):
+def plot_arrows(starts, ends, wv, estimator=PCA, **kwargs):
     if len(starts) != len(ends):
         raise ValueError('starts and ends must be the same length.')
     fig, ax = plt.subplots(figsize=kwargs.pop('figsize', (8, 8)))
@@ -45,3 +49,40 @@ def plot_vectors(starts, ends, wv, estimator=PCA, **kwargs):
         x1, y1 = xstart[i]
         x2, y2 = xend[i]
         plt.arrow(x1, y1, x2 - x1, y2 - y1)
+
+
+def plot_vectors(words, model, estimator=TSNE, **kwargs):
+    names = []
+    vectors = []
+    for word in words:
+        if word in model.wv:
+            names.append(word)
+            vectors.append(model.wv[word])
+
+    X = np.r_[vectors]  # NOQA: N806
+    x_red = estimator(n_components=2).fit_transform(X)
+    fig, ax = plt.subplots(figsize=kwargs.pop('figsize', (16, 16)))  # NOQA: E912
+    ax.scatter(*x_red.T)
+
+    for i, word in enumerate(names):
+        plt.annotate(word, x_red[i])
+
+
+def make_embedding_layer(model, tokenizer, MAX_SEQUENCE_LENGTH):  # NOQA: N803
+    word_index = tokenizer.word_index
+    if isinstance(model, Word2Vec):
+        wv = model.wv
+    elif isinstance(model, KeyedVectors):
+        wv = model
+    embedding_matrix = np.zeros((len(word_index) + 1, wv.vector_size))
+    for word, i in word_index.items():
+        try:
+            vector = wv.get_vector(word, False)
+            embedding_matrix[i] = vector
+        except KeyError:
+            continue
+    el = Embedding(
+        len(word_index) + 1, wv.vector_size, weights=[embedding_matrix],
+        input_length=MAX_SEQUENCE_LENGTH, trainable=False
+    )
+    return el
