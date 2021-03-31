@@ -133,3 +133,8 @@ dmypy.json
 .DS_Store
 
 assets/
+semantic/data/
+semantic/images/
+neuralnets/aclImdb/
+*.w2v
+*.png
